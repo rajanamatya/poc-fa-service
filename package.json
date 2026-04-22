@@ -1,0 +1,32 @@
+{
+  "name": "serverless-cdk-template",
+  "private": true,
+  "workspaces": [
+    "infrastructure",
+    "services/*"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "npm -ws run build",
+    "test": "npm -ws run test",
+    "lint": "npm -ws --if-present run lint",
+    "format": "prettier -w .",
+    "format:check": "prettier -c .",
+    "synth": "npm --workspace infrastructure run synth",
+    "deploy": "npm --workspace infrastructure run deploy",
+    "init": "node scripts/init.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "eslint": "^10.1.0",
+    "eslint-config-prettier": "^9.0.0",
+    "eslint-plugin-prettier": "^5.0.0",
+    "prettier": "^3.0.0",
+    "typescript-eslint": "^8.0.0"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "2.244.0"
+  }
+}
