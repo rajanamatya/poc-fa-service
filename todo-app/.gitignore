@@ -1,0 +1,19 @@
+node_modules/
+dist/
+dist-ssr/
+storybook-static/
+coverage/
+*.local
+.env*.local
+.DS_Store
+Thumbs.db
+*.log
+
+# CDK
+cdk/cdk.out/
+cdk/dist/
+
+# Prevent stale CDK tsc output from shadowing vite.config.ts
+# CDK's `tsc` compiles bin/ and lib/ but can accidentally emit vite.config.js
+# to the project root. Vite loads .js before .ts — this file silently wins.
+vite.config.js

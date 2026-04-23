@@ -24,22 +24,21 @@ export interface AppConfig {
 }
 
 export const appConfig: AppConfig = {
-  appName: 'my-app', // rename to your app
-  owner: 'platform-team', // your team
-  costCenter: 'shared', // your cost center
-  qualifier: 'wc-devops', // ≤10 chars, alphanumeric + hyphens; must match --qualifier in cdk bootstrap
+  appName: 'rep',
+  owner: 'platform-rxa',
+  costCenter: 'shared',
+  qualifier: 'wc-devops',
   infraAccount: {
-    // AWS Deploy account where the pipeline lives
-    account: '111111111111',
-    region: 'us-east-1',
-    sourceRepo: 'your-org/your-repo', // Bitbucket/GitHub workspace + repo slug
-    sourceBranch: 'main', // branch that triggers the pipeline
-    connectionArn: 'arn:aws:codeconnections:REGION:111111111111:connection/CONNECTION-ID',
+    account: '864899834457',
+    region: 'us-east-2',
+    sourceRepo: 'bitbucket/rep',
+    sourceBranch: 'main',
+    connectionArn: 'arn:aws:codeconnections:us-east-2:864899834457:connection/f31d9a2a-1eef-4887-836e-800268dca2e5',
   },
   envs: {
-    // sandbox: { name: 'sandbox', account: '021399176731', region: 'us-east-1'}
-    // dev:  { name: 'dev',  account: '222222222222', region: 'us-east-1' },
-    // test: { name: 'test', account: '333333333333', region: 'us-east-1' },
-    // prod: { name: 'prod', account: '444444444444', region: 'us-east-1' },
-  },
-}
+    sandbox: { name: 'sandbox', account: '471744311207', region: 'us-east-2' },
+    //dev: { name: 'dev', account: '043206427225', region: 'us-east-2' },
+    // test: { name: 'test', account: 'REPLACE_ME', region: 'us-east-2' },
+    // prod: { name: 'prod', account: 'REPLACE_ME', region: 'us-east-2' },
+  }
+};

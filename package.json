@@ -1,9 +1,10 @@
 {
-  "name": "serverless-cdk-template",
+  "name": "rep",
   "private": true,
   "workspaces": [
     "infrastructure",
-    "services/*"
+    "services/*",
+    "todo-app"
   ],
   "engines": {
     "node": ">=22.0.0"
@@ -16,7 +17,9 @@
     "format:check": "prettier -c .",
     "synth": "npm --workspace infrastructure run synth",
     "deploy": "npm --workspace infrastructure run deploy",
-    "init": "node scripts/init.mjs"
+    "init": "node scripts/init.mjs",
+    "dev:frontend": "npm --workspace todo-app run dev",
+    "build:frontend": "npm --workspace todo-app run build"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",

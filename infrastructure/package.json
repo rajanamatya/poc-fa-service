@@ -1,5 +1,5 @@
 {
-  "name": "aws-lambda-template",
+  "name": "rep-infra",
   "version": "0.1.0",
   "bin": {
     "aws-lambda-template": "bin/aws-lambda-template.js"
