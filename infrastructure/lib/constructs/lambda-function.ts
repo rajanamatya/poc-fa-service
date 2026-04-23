@@ -15,6 +15,7 @@ export interface LambdaFunctionProps {
   functionName: string
   envConfig: EnvConfig
   deploymentConfig?: codedeploy.ILambdaDeploymentConfig
+  environment?: Record<string, string>
 }
 
 export class LambdaFunction extends Construct {
@@ -54,6 +55,7 @@ export class LambdaFunction extends Construct {
       handler,
       runtime,
       logGroup,
+      environment: props.environment,
     })
 
     const version = this.fn.currentVersion

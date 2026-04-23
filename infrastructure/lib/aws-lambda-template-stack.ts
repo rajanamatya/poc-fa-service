@@ -7,11 +7,13 @@ import { appConfig, EnvConfig } from '../config/environments'
 
 export interface AwsLambdaTemplateStackProps extends cdk.StackProps {
   envConfig: EnvConfig
-  serviceAssetPath?: string // override in tests to avoid requiring a built dist/
+  serviceAssetPath?: string
+  bffAssetPath?: string
 }
 
 export class AwsLambdaTemplateStack extends cdk.Stack {
   public readonly apiUrlOutput: cdk.CfnOutput
+  public readonly bffApiUrlOutput: cdk.CfnOutput
 
   constructor(scope: Construct, id: string, props: AwsLambdaTemplateStackProps) {
     super(scope, id, {
@@ -19,7 +21,8 @@ export class AwsLambdaTemplateStack extends cdk.Stack {
       env: { account: props.envConfig.account, region: props.envConfig.region },
     })
 
-    const lambdaFunction = new LambdaFunction(this, appConfig.appName, {
+    // ── Backend service ──────────────────────────────────────────────
+    const backendLambda = new LambdaFunction(this, appConfig.appName, {
       functionName: `${appConfig.appName}-${props.envConfig.name}`,
       envConfig: props.envConfig,
       codeConfig: {
@@ -28,12 +31,44 @@ export class AwsLambdaTemplateStack extends cdk.Stack {
       },
     })
 
-    const api = new ApiGateway(this, 'Api', {
-      apiName: `${appConfig.appName}-${props.envConfig.name}`,
+    const backendApi = new ApiGateway(this, 'BackendApi', {
+      apiName: `${appConfig.appName}-backend-${props.envConfig.name}`,
     })
-    api.addRoute(apigwv2.HttpMethod.GET, '/', lambdaFunction.alias)
-    this.apiUrlOutput = api.apiUrlOutput
+    backendApi.addRoute(apigwv2.HttpMethod.GET, '/', backendLambda.alias)
+    backendApi.addRoute(apigwv2.HttpMethod.GET, '/{proxy+}', backendLambda.alias)
+    backendApi.addRoute(apigwv2.HttpMethod.POST, '/{proxy+}', backendLambda.alias)
+    backendApi.addRoute(apigwv2.HttpMethod.PUT, '/{proxy+}', backendLambda.alias)
+    backendApi.addRoute(apigwv2.HttpMethod.DELETE, '/{proxy+}', backendLambda.alias)
 
+    this.apiUrlOutput = backendApi.apiUrlOutput
+
+    // ── BFF service ──────────────────────────────────────────────────
+    const bffLambda = new LambdaFunction(this, 'bff', {
+      functionName: `${appConfig.appName}-bff-${props.envConfig.name}`,
+      envConfig: props.envConfig,
+      codeConfig: {
+        type: 'asset',
+        assetPath: props.bffAssetPath ?? '../services/bff/dist',
+      },
+      environment: {
+        BACKEND_API_URL: backendApi.httpApi.apiEndpoint,
+      },
+    })
+
+    const bffApi = new ApiGateway(this, 'BffApi', {
+      apiName: `${appConfig.appName}-bff-${props.envConfig.name}`,
+    })
+    bffApi.addRoute(apigwv2.HttpMethod.GET, '/', bffLambda.alias)
+    bffApi.addRoute(apigwv2.HttpMethod.GET, '/{proxy+}', bffLambda.alias)
+    bffApi.addRoute(apigwv2.HttpMethod.POST, '/{proxy+}', bffLambda.alias)
+    bffApi.addRoute(apigwv2.HttpMethod.PUT, '/{proxy+}', bffLambda.alias)
+    bffApi.addRoute(apigwv2.HttpMethod.DELETE, '/{proxy+}', bffLambda.alias)
+
+    this.bffApiUrlOutput = new cdk.CfnOutput(this, 'BffApiUrl', {
+      value: bffApi.httpApi.apiEndpoint,
+    })
+
+    // ── Tags ─────────────────────────────────────────────────────────
     cdk.Tags.of(this).add('app', appConfig.appName)
     cdk.Tags.of(this).add('owner', appConfig.owner)
     cdk.Tags.of(this).add('costCenter', appConfig.costCenter)

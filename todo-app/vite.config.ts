@@ -5,14 +5,18 @@ import { fileURLToPath, URL } from 'url'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
 
+  // BFF_API_URL is the frontend-facing endpoint (the BFF API Gateway).
+  // Falls back to API_URL for backward compatibility.
+  const bffUrl = env.BFF_API_URL || env.API_URL
+
   const serverConfig = (() => {
-    if (!env.API_URL) return undefined
-    const apiUrl = new URL(env.API_URL)
-    const stagePath = apiUrl.pathname.replace(/\/$/, '') // e.g. /V1
+    if (!bffUrl) return undefined
+    const apiUrl = new URL(bffUrl)
+    const stagePath = apiUrl.pathname.replace(/\/$/, '')
     return {
       proxy: {
         '/api': {
-          target: apiUrl.origin, // scheme + host only — http-proxy drops target path
+          target: apiUrl.origin,
           changeOrigin: true,
           rewrite: (path: string) => path.replace(/^\/api/, stagePath),
         },
