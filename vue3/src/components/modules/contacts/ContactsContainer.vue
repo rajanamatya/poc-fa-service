@@ -93,6 +93,8 @@ const paginatedContacts = computed(() => {
 })
 
 const handleView = (id: string) => {
-  router.push(`/contacts/${id}`)
+  const c = contacts.value.find((x) => x.clientId === id)
+  const name = c ? `${c.firstName} ${c.lastName}` : 'Contact'
+  router.push({ path: `/contacts/${id}`, query: { name } })
 }
 </script>
