@@ -1,4 +1,5 @@
 import * as cdk from 'aws-cdk-lib/core'
+import * as ec2 from 'aws-cdk-lib/aws-ec2'
 import * as lambda from 'aws-cdk-lib/aws-lambda'
 import * as logs from 'aws-cdk-lib/aws-logs'
 import * as codedeploy from 'aws-cdk-lib/aws-codedeploy'
@@ -16,11 +17,20 @@ export interface LambdaFunctionProps {
   envConfig: EnvConfig
   deploymentConfig?: codedeploy.ILambdaDeploymentConfig
   environment?: Record<string, string>
+  /** VPC to place the Lambda in (required for RDS access) */
+  vpc?: ec2.IVpc
+  /** VPC subnets for the Lambda */
+  vpcSubnets?: ec2.SubnetSelection
+  /** Security groups for the Lambda */
+  securityGroups?: ec2.ISecurityGroup[]
+  /** Timeout — defaults to 30s */
+  timeout?: cdk.Duration
 }
 
 export class LambdaFunction extends Construct {
   public readonly alias: lambda.Alias
   public readonly fn: lambda.Function
+  public readonly securityGroup?: ec2.SecurityGroup
 
   constructor(scope: Construct, id: string, props: LambdaFunctionProps) {
     super(scope, id)
@@ -43,6 +53,15 @@ export class LambdaFunction extends Construct {
       runtime = lambda.Runtime.FROM_IMAGE
     }
 
+    // Create a security group for the Lambda if it's in a VPC
+    if (props.vpc && !props.securityGroups?.length) {
+      this.securityGroup = new ec2.SecurityGroup(this, 'LambdaSg', {
+        vpc: props.vpc,
+        description: `Security group for ${functionName} Lambda`,
+        allowAllOutbound: true,
+      })
+    }
+
     const logGroup = new logs.LogGroup(this, 'LogGroup', {
       logGroupName: `/aws/lambda/${functionName}`,
       retention: logs.RetentionDays.ONE_MONTH,
@@ -56,6 +75,10 @@ export class LambdaFunction extends Construct {
       runtime,
       logGroup,
       environment: props.environment,
+      vpc: props.vpc,
+      vpcSubnets: props.vpcSubnets,
+      securityGroups: props.securityGroups ?? (this.securityGroup ? [this.securityGroup] : undefined),
+      timeout: props.timeout ?? cdk.Duration.seconds(30),
     })
 
     const version = this.fn.currentVersion

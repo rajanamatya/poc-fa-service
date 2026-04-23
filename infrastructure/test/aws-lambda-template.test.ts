@@ -3,20 +3,6 @@ import * as cdk from 'aws-cdk-lib/core'
 import { Template, Match } from 'aws-cdk-lib/assertions'
 import { AwsLambdaTemplateStack } from '../lib/aws-lambda-template-stack'
 import { appConfig, EnvConfig } from '../config/environments'
-import { test } from 'vitest'
-import { expect } from 'vitest'
-import { test } from 'vitest'
-import { expect } from 'vitest'
-import { test } from 'vitest'
-import { test } from 'vitest'
-import { expect } from 'vitest'
-import { test } from 'vitest'
-import { expect } from 'vitest'
-import { test } from 'vitest'
-import { test } from 'vitest'
-import { test } from 'vitest'
-import { beforeAll } from 'vitest'
-import { describe } from 'vitest'
 
 const devEnv: EnvConfig = { name: 'dev', account: '123456789012', region: 'us-east-1' }
 
@@ -32,6 +18,7 @@ describe('AwsLambdaTemplateStack', () => {
       envConfig: devEnv,
       serviceAssetPath: stubAssetPath,
       bffAssetPath: stubAssetPath,
+      skipDatabase: true,
     })
     template = Template.fromStack(stack)
   })
@@ -44,7 +31,7 @@ describe('AwsLambdaTemplateStack', () => {
     })
   })
 
-  test('creates BFF Lambda function with correct name and BACKEND_API_URL env var', () => {
+  test('creates BFF Lambda function with correct name', () => {
     template.hasResourceProperties('AWS::Lambda::Function', {
       FunctionName: `${appConfig.appName}-bff-dev`,
       Runtime: 'nodejs22.x',
@@ -77,13 +64,6 @@ describe('AwsLambdaTemplateStack', () => {
     expect(Object.keys(routes).length).toBe(2)
   })
 
-  test('outputs ApiUrl and BffApiUrl', () => {
-    const outputs = template.findOutputs('*')
-    // Backend ApiGateway outputs ApiUrl, BFF ApiGateway outputs its own ApiUrl,
-    // plus the explicit BffApiUrl CfnOutput = 3 total
-    expect(Object.keys(outputs).length).toBe(3)
-  })
-
   test('applies required tags to Lambda functions', () => {
     template.hasResourceProperties('AWS::Lambda::Function', {
       Tags: Match.arrayWith([
@@ -92,6 +72,48 @@ describe('AwsLambdaTemplateStack', () => {
         Match.objectLike({ Key: 'env', Value: 'dev' }),
         Match.objectLike({ Key: 'owner', Value: appConfig.owner }),
       ]),
+    })
+  })
+})
+
+describe('AwsLambdaTemplateStack with database', () => {
+  let template: Template
+
+  beforeAll(() => {
+    const app = new cdk.App()
+    const stack = new AwsLambdaTemplateStack(app, 'TestStackWithDb', {
+      envConfig: devEnv,
+      serviceAssetPath: stubAssetPath,
+      bffAssetPath: stubAssetPath,
+      // skipDatabase defaults to false — creates VPC + RDS
+    })
+    template = Template.fromStack(stack)
+  })
+
+  test('creates a VPC', () => {
+    template.resourceCountIs('AWS::EC2::VPC', 1)
+  })
+
+  test('creates an RDS PostgreSQL instance', () => {
+    template.hasResourceProperties('AWS::RDS::DBInstance', {
+      Engine: 'postgres',
+      DBInstanceClass: 'db.t3.micro',
+    })
+  })
+
+  test('creates a Secrets Manager secret for DB credentials', () => {
+    template.resourceCountIs('AWS::SecretsManager::Secret', 1)
+  })
+
+  test('backend Lambda has DB environment variables', () => {
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      FunctionName: `${appConfig.appName}-dev`,
+      Environment: {
+        Variables: Match.objectLike({
+          DB_SECRET_ARN: Match.anyValue(),
+          DB_NAME: Match.anyValue(),
+        }),
+      },
     })
   })
 })

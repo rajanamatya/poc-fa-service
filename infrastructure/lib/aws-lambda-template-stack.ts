@@ -1,14 +1,18 @@
 import * as cdk from 'aws-cdk-lib/core'
+import * as ec2 from 'aws-cdk-lib/aws-ec2'
 import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2'
 import { Construct } from 'constructs'
 import { LambdaFunction } from './constructs/lambda-function'
 import { ApiGateway } from './constructs/api-gateway'
+import { Database } from './constructs/database'
 import { appConfig, EnvConfig } from '../config/environments'
 
 export interface AwsLambdaTemplateStackProps extends cdk.StackProps {
   envConfig: EnvConfig
   serviceAssetPath?: string
   bffAssetPath?: string
+  /** Skip VPC/RDS creation for lightweight test synthesis */
+  skipDatabase?: boolean
 }
 
 export class AwsLambdaTemplateStack extends cdk.Stack {
@@ -21,6 +25,36 @@ export class AwsLambdaTemplateStack extends cdk.Stack {
       env: { account: props.envConfig.account, region: props.envConfig.region },
     })
 
+    // ── Networking + Database ────────────────────────────────────────
+    let vpc: ec2.IVpc | undefined
+    let db: Database | undefined
+    let backendEnv: Record<string, string> = {}
+
+    if (!props.skipDatabase) {
+      vpc = new ec2.Vpc(this, 'Vpc', {
+        maxAzs: 2,
+        natGateways: 1,
+        subnetConfiguration: [
+          { name: 'Public', subnetType: ec2.SubnetType.PUBLIC, cidrMask: 24 },
+          { name: 'Private', subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS, cidrMask: 24 },
+          { name: 'Isolated', subnetType: ec2.SubnetType.PRIVATE_ISOLATED, cidrMask: 24 },
+        ],
+      })
+
+      db = new Database(this, 'Database', {
+        vpc,
+        databaseName: `${appConfig.appName}_${props.envConfig.name}`.replace(/-/g, '_'),
+        envName: props.envConfig.name,
+      })
+
+      backendEnv = {
+        DB_SECRET_ARN: db.secret.secretArn,
+        DB_HOST: db.instance.dbInstanceEndpointAddress,
+        DB_PORT: db.instance.dbInstanceEndpointPort,
+        DB_NAME: `${appConfig.appName}_${props.envConfig.name}`.replace(/-/g, '_'),
+      }
+    }
+
     // ── Backend service ──────────────────────────────────────────────
     const backendLambda = new LambdaFunction(this, appConfig.appName, {
       functionName: `${appConfig.appName}-${props.envConfig.name}`,
@@ -29,7 +63,16 @@ export class AwsLambdaTemplateStack extends cdk.Stack {
         type: 'asset',
         assetPath: props.serviceAssetPath ?? `../services/${appConfig.appName}/dist`,
       },
+      environment: backendEnv,
+      vpc,
+      vpcSubnets: vpc ? { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS } : undefined,
     })
+
+    // Grant Lambda access to RDS
+    if (db && backendLambda.securityGroup) {
+      db.allowFrom(backendLambda.securityGroup)
+      db.secret.grantRead(backendLambda.fn)
+    }
 
     const backendApi = new ApiGateway(this, 'BackendApi', {
       apiName: `${appConfig.appName}-backend-${props.envConfig.name}`,

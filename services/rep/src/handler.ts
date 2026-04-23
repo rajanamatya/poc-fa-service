@@ -1,18 +1,8 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda'
+import { getPool } from './db'
+import { ensureSchema } from './migrate'
 
-// In-memory todo storage (in production, you'd use a database)
-let todos: Todo[] = [
-  { id: '1', title: 'Learn Vue 3', completed: false, createdAt: new Date().toISOString() },
-  { id: '2', title: 'Build a todo app', completed: false, createdAt: new Date().toISOString() },
-  { id: '3', title: 'Deploy to AWS', completed: false, createdAt: new Date().toISOString() },
-]
-
-interface Todo {
-  id: string
-  title: string
-  completed: boolean
-  createdAt: string
-}
+let schemaReady = false
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -20,107 +10,105 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 }
 
-/**
- * Parse a resource ID from the raw path.
- * Supports paths like /todos/123, /123, or /{proxy+} catch-all.
- */
+/** Parse a resource ID from the raw path (supports /{proxy+} catch-all). */
 function parseId(event: APIGatewayProxyEventV2): string | undefined {
-  // Try named path parameter first (if route defines {id})
   if (event.pathParameters?.id) return event.pathParameters.id
-
-  // Fall back to parsing rawPath — handles /{proxy+} and BFF-forwarded paths
   const segments = (event.rawPath || '/').split('/').filter(Boolean)
-  // If path is like /todos/123 → id is last segment; if /123 → id is first segment
-  return segments.length > 0 ? segments[segments.length - 1] : undefined
+  // /todos/abc123 → last segment is the id
+  return segments.length >= 2 ? segments[segments.length - 1] : undefined
+}
+
+function json(statusCode: number, body: unknown): APIGatewayProxyResultV2 {
+  return { statusCode, headers: corsHeaders, body: JSON.stringify(body) }
 }
 
 export async function handler(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
   const method = event.requestContext.http.method
-  const body = event.body
 
-  // Handle CORS preflight
   if (method === 'OPTIONS') {
     return { statusCode: 200, headers: corsHeaders, body: '' }
   }
 
-  // Root health check
+  // Health check
   if (event.rawPath === '/' && method === 'GET') {
-    return {
-      statusCode: 200,
-      headers: corsHeaders,
-      body: JSON.stringify({ status: 'ok' }),
-    }
+    return json(200, { status: 'ok' })
   }
-
-  const id = parseId(event)
 
   try {
-    switch (method) {
-      case 'GET':
-        if (id && todos.some((t) => t.id === id)) {
-          const todo = todos.find((t) => t.id === id)
-          return { statusCode: 200, headers: corsHeaders, body: JSON.stringify(todo) }
-        }
-        // List all
-        return { statusCode: 200, headers: corsHeaders, body: JSON.stringify(todos) }
+    const pool = await getPool()
 
-      case 'POST': {
-        const newTodo = JSON.parse(body || '{}')
-        const todo: Todo = {
-          id: Date.now().toString(),
-          title: newTodo.title,
-          completed: false,
-          createdAt: new Date().toISOString(),
+    // Run migration once per cold start
+    if (!schemaReady) {
+      await ensureSchema(pool)
+      schemaReady = true
+    }
+
+    const id = parseId(event)
+
+    switch (method) {
+      case 'GET': {
+        if (id) {
+          const { rows } = await pool.query(
+            'SELECT id, title, completed, created_at AS "createdAt" FROM todos WHERE id = $1',
+            [id],
+          )
+          if (rows.length === 0) return json(404, { error: 'Todo not found' })
+          return json(200, rows[0])
         }
-        todos.push(todo)
-        return { statusCode: 201, headers: corsHeaders, body: JSON.stringify(todo) }
+        const { rows } = await pool.query(
+          'SELECT id, title, completed, created_at AS "createdAt" FROM todos ORDER BY created_at DESC',
+        )
+        return json(200, rows)
       }
 
-      case 'PUT':
-        if (id) {
-          const updateData = JSON.parse(body || '{}')
-          const todoIndex = todos.findIndex((t) => t.id === id)
-          if (todoIndex === -1) {
-            return {
-              statusCode: 404,
-              headers: corsHeaders,
-              body: JSON.stringify({ error: 'Todo not found' }),
-            }
-          }
-          todos[todoIndex] = { ...todos[todoIndex], ...updateData }
-          return { statusCode: 200, headers: corsHeaders, body: JSON.stringify(todos[todoIndex]) }
-        }
-        break
+      case 'POST': {
+        const { title } = JSON.parse(event.body || '{}')
+        if (!title) return json(400, { error: 'title is required' })
+        const { rows } = await pool.query(
+          'INSERT INTO todos (title) VALUES ($1) RETURNING id, title, completed, created_at AS "createdAt"',
+          [title],
+        )
+        return json(201, rows[0])
+      }
 
-      case 'DELETE':
-        if (id) {
-          const todoIndex = todos.findIndex((t) => t.id === id)
-          if (todoIndex === -1) {
-            return {
-              statusCode: 404,
-              headers: corsHeaders,
-              body: JSON.stringify({ error: 'Todo not found' }),
-            }
-          }
-          todos.splice(todoIndex, 1)
-          return { statusCode: 204, headers: corsHeaders, body: '' }
+      case 'PUT': {
+        if (!id) return json(400, { error: 'Missing todo id' })
+        const updates = JSON.parse(event.body || '{}')
+        const fields: string[] = []
+        const values: unknown[] = []
+        let idx = 1
+
+        if (updates.title !== undefined) {
+          fields.push(`title = $${idx++}`)
+          values.push(updates.title)
         }
-        break
+        if (updates.completed !== undefined) {
+          fields.push(`completed = $${idx++}`)
+          values.push(updates.completed)
+        }
+        if (fields.length === 0) return json(400, { error: 'No fields to update' })
+
+        values.push(id)
+        const { rows } = await pool.query(
+          `UPDATE todos SET ${fields.join(', ')} WHERE id = $${idx} RETURNING id, title, completed, created_at AS "createdAt"`,
+          values,
+        )
+        if (rows.length === 0) return json(404, { error: 'Todo not found' })
+        return json(200, rows[0])
+      }
+
+      case 'DELETE': {
+        if (!id) return json(400, { error: 'Missing todo id' })
+        const { rowCount } = await pool.query('DELETE FROM todos WHERE id = $1', [id])
+        if (rowCount === 0) return json(404, { error: 'Todo not found' })
+        return { statusCode: 204, headers: corsHeaders, body: '' }
+      }
 
       default:
-        return {
-          statusCode: 405,
-          headers: corsHeaders,
-          body: JSON.stringify({ error: 'Method not allowed' }),
-        }
+        return json(405, { error: 'Method not allowed' })
     }
   } catch (error) {
-    return {
-      statusCode: 500,
-      headers: corsHeaders,
-      body: JSON.stringify({ error: 'Internal server error' }),
-    }
+    console.error('Handler error:', error)
+    return json(500, { error: 'Internal server error' })
   }
-
-  return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'Bad request' }) }
 }
