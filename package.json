@@ -4,7 +4,7 @@
   "workspaces": [
     "infrastructure",
     "services/*",
-    "todo-app"
+    "vue3"
   ],
   "engines": {
     "node": ">=22.0.0"
@@ -18,8 +18,8 @@
     "synth": "npm --workspace infrastructure run synth",
     "deploy": "npm --workspace infrastructure run deploy",
     "init": "node scripts/init.mjs",
-    "dev:frontend": "npm --workspace todo-app run dev",
-    "build:frontend": "npm --workspace todo-app run build"
+    "dev:frontend": "npm --workspace vue3 run dev",
+    "build:frontend": "npm --workspace vue3 run build"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
