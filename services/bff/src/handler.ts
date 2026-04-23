@@ -1,5 +1,4 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda'
-import { request } from 'undici'
 
 /**
  * BFF (Backend For Frontend) Lambda handler.
@@ -8,6 +7,8 @@ import { request } from 'undici'
  * - Receives requests from the frontend via the BFF API Gateway
  * - Forwards them to the backend API Gateway (BACKEND_API_URL env var)
  * - Can add auth headers, transform payloads, aggregate calls, etc.
+ *
+ * Uses native fetch (Node 22+) — no external HTTP dependencies needed.
  */
 
 const BACKEND_API_URL = process.env.BACKEND_API_URL ?? ''
@@ -37,23 +38,24 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
   try {
     const targetUrl = `${BACKEND_API_URL}${path}${queryString}`
 
-    // Forward the request to the backend service
-    const backendResponse = await request(targetUrl, {
-      method: method as any,
+    const fetchOptions: RequestInit = {
+      method,
       headers: forwardHeaders(event),
-      body: event.body ?? undefined,
-    })
+    }
 
-    const responseBody = await backendResponse.body.text()
+    // Only attach body for methods that support it
+    if (event.body && method !== 'GET' && method !== 'HEAD') {
+      fetchOptions.body = event.body
+    }
 
-    const contentType = backendResponse.headers['content-type']
-    const ct = Array.isArray(contentType) ? contentType[0] : (contentType ?? 'application/json')
+    const backendResponse = await fetch(targetUrl, fetchOptions)
+    const responseBody = await backendResponse.text()
 
     return {
-      statusCode: backendResponse.statusCode,
+      statusCode: backendResponse.status,
       headers: {
         ...corsHeaders(),
-        'content-type': ct,
+        'content-type': backendResponse.headers.get('content-type') ?? 'application/json',
       },
       body: responseBody,
     }
@@ -81,7 +83,6 @@ function forwardHeaders(event: APIGatewayProxyEventV2): Record<string, string> {
     'content-type': 'application/json',
   }
 
-  // Forward authorization if present
   const auth = event.headers?.['authorization'] ?? event.headers?.['Authorization']
   if (auth) {
     headers['authorization'] = auth

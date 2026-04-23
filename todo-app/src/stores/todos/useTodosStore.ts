@@ -28,7 +28,7 @@ export const useTodosStore = defineStore('todos', () => {
     try {
       clearError()
       loading.value = true
-      todos.value = todosService.getTodos()
+      todos.value = await todosService.getTodos()
     } catch (err) {
       setError('Failed to fetch todos')
     } finally {

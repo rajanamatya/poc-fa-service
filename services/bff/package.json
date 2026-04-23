@@ -2,12 +2,9 @@
   "name": "@services/bff",
   "private": true,
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "node -e \"require('esbuild').buildSync({entryPoints:['src/handler.ts'],bundle:true,platform:'node',target:'node22',outfile:'dist/handler.js'})\"",
     "test": "vitest run",
     "lint": "eslint ."
-  },
-  "dependencies": {
-    "undici": "^7.0.0"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.0",

@@ -2,7 +2,7 @@
   "name": "@services/rep",
   "private": true,
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "node -e \"require('esbuild').buildSync({entryPoints:['src/handler.ts'],bundle:true,platform:'node',target:'node22',outfile:'dist/handler.js',external:['@aws-sdk/*']})\"",
     "test": "vitest run",
     "lint": "eslint ."
   },
