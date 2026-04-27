@@ -1,3 +1,6 @@
+CREATE TYPE "public"."consent_status" AS ENUM('pending', 'accepted', 'declined');--> statement-breakpoint
+CREATE TYPE "public"."intake_status" AS ENUM('not_started', 'in_progress', 'complete');--> statement-breakpoint
+CREATE TYPE "public"."referral_status" AS ENUM('none', 'referred', 'viewed', 'connected');--> statement-breakpoint
 CREATE TABLE "contacts" (
 	"client_id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"advisor_id" text,
@@ -7,13 +10,10 @@ CREATE TABLE "contacts" (
 	"phone" text,
 	"state" text NOT NULL,
 	"notes" text,
-	"intake_status" text DEFAULT 'not_started' NOT NULL,
-	"referral_status" text DEFAULT 'none' NOT NULL,
-	"consent_status" text DEFAULT 'pending' NOT NULL,
+	"intake_status" "intake_status" DEFAULT 'not_started' NOT NULL,
+	"referral_status" "referral_status" DEFAULT 'none' NOT NULL,
+	"consent_status" "consent_status" DEFAULT 'pending' NOT NULL,
 	"consent_given_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "contacts_intake_status_check" CHECK ("contacts"."intake_status" IN ('not_started', 'in_progress', 'complete')),
-	CONSTRAINT "contacts_referral_status_check" CHECK ("contacts"."referral_status" IN ('none', 'referred', 'viewed', 'connected')),
-	CONSTRAINT "contacts_consent_status_check" CHECK ("contacts"."consent_status" IN ('pending', 'accepted', 'declined'))
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );

@@ -1,5 +1,5 @@
 {
-  "id": "b474ff59-5fff-490f-9860-4501a9e9c85c",
+  "id": "933e7303-8e2f-4fec-8c82-c4e5a124445e",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -59,21 +59,24 @@
         },
         "intake_status": {
           "name": "intake_status",
-          "type": "text",
+          "type": "intake_status",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
           "default": "'not_started'"
         },
         "referral_status": {
           "name": "referral_status",
-          "type": "text",
+          "type": "referral_status",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
           "default": "'none'"
         },
         "consent_status": {
           "name": "consent_status",
-          "type": "text",
+          "type": "consent_status",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
           "default": "'pending'"
@@ -104,24 +107,40 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {
-        "contacts_intake_status_check": {
-          "name": "contacts_intake_status_check",
-          "value": "\"contacts\".\"intake_status\" IN ('not_started', 'in_progress', 'complete')"
-        },
-        "contacts_referral_status_check": {
-          "name": "contacts_referral_status_check",
-          "value": "\"contacts\".\"referral_status\" IN ('none', 'referred', 'viewed', 'connected')"
-        },
-        "contacts_consent_status_check": {
-          "name": "contacts_consent_status_check",
-          "value": "\"contacts\".\"consent_status\" IN ('pending', 'accepted', 'declined')"
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     }
   },
-  "enums": {},
+  "enums": {
+    "public.consent_status": {
+      "name": "consent_status",
+      "schema": "public",
+      "values": [
+        "pending",
+        "accepted",
+        "declined"
+      ]
+    },
+    "public.intake_status": {
+      "name": "intake_status",
+      "schema": "public",
+      "values": [
+        "not_started",
+        "in_progress",
+        "complete"
+      ]
+    },
+    "public.referral_status": {
+      "name": "referral_status",
+      "schema": "public",
+      "values": [
+        "none",
+        "referred",
+        "viewed",
+        "connected"
+      ]
+    }
+  },
   "schemas": {},
   "sequences": {},
   "roles": {},

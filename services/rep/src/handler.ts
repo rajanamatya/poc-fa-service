@@ -1,6 +1,6 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda'
 import { desc, eq, sql } from 'drizzle-orm'
-import { contacts, getDb, type NewContact } from './db'
+import { ConsentStatus, IntakeStatus, ReferralStatus, contacts, getDb, type NewContact } from './db'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -45,17 +45,39 @@ function pickDefined<T extends object, K extends keyof T>(source: T, keys: reado
 }
 
 /**
- * Wire shape: timestamps arrive as ISO strings over JSON. Drizzle's `date` mode
- * expects real Date instances, so we coerce at the boundary.
+ * Wire shape: timestamps arrive as ISO strings over JSON, and enum fields
+ * arrive as plain strings. We coerce dates and validate enums against the
+ * domain classes before letting Drizzle/Postgres see them.
  */
 type ContactInput = Omit<Partial<NewContact>, 'consentGivenAt'> & { consentGivenAt?: string | Date | null }
 
+class ValidationError extends Error {}
+
 function parseBody(raw: string | undefined): Partial<NewContact> {
   const input = JSON.parse(raw || '{}') as ContactInput
-  const { consentGivenAt, ...rest } = input
+  const { consentGivenAt, intakeStatus, referralStatus, consentStatus, ...rest } = input
   const result: Partial<NewContact> = rest
+
   if (consentGivenAt !== undefined) {
     result.consentGivenAt = consentGivenAt === null ? null : new Date(consentGivenAt)
+  }
+  if (intakeStatus !== undefined) {
+    if (!IntakeStatus.is(intakeStatus)) {
+      throw new ValidationError(`intakeStatus must be one of ${IntakeStatus.values.join(', ')}`)
+    }
+    result.intakeStatus = intakeStatus
+  }
+  if (referralStatus !== undefined) {
+    if (!ReferralStatus.is(referralStatus)) {
+      throw new ValidationError(`referralStatus must be one of ${ReferralStatus.values.join(', ')}`)
+    }
+    result.referralStatus = referralStatus
+  }
+  if (consentStatus !== undefined) {
+    if (!ConsentStatus.is(consentStatus)) {
+      throw new ValidationError(`consentStatus must be one of ${ConsentStatus.values.join(', ')}`)
+    }
+    result.consentStatus = consentStatus
   }
   return result
 }
@@ -95,9 +117,9 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
             phone: body.phone ?? null,
             state: body.state,
             notes: body.notes ?? null,
-            intakeStatus: body.intakeStatus ?? 'not_started',
-            referralStatus: body.referralStatus ?? 'none',
-            consentStatus: body.consentStatus ?? 'pending',
+            intakeStatus: body.intakeStatus ?? IntakeStatus.default,
+            referralStatus: body.referralStatus ?? ReferralStatus.default,
+            consentStatus: body.consentStatus ?? ConsentStatus.default,
             consentGivenAt: body.consentGivenAt ?? null,
           })
           .returning()
@@ -131,6 +153,8 @@ export async function handler(event: APIGatewayProxyEventV2): Promise<APIGateway
         return json(405, { error: 'Method not allowed' })
     }
   } catch (error) {
+    if (error instanceof ValidationError) return json(400, { error: error.message })
+    if (error instanceof SyntaxError) return json(400, { error: 'Invalid JSON body' })
     console.error('Handler error:', error)
     return json(500, { error: 'Internal server error' })
   }

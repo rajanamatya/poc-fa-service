@@ -24,6 +24,8 @@
     "db:down": "docker compose down",
     "db:reset": "docker compose down -v && docker compose up -d",
     "db:migrate": "npm --workspace services/rep run db:migrate",
+    "db:rollback": "npm --workspace services/rep run db:rollback",
+    "db:status": "npm --workspace services/rep run db:status",
     "db:generate": "npm --workspace services/rep run db:generate",
     "db:studio": "npm --workspace services/rep run db:studio"
   },

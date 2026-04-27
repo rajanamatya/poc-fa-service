@@ -164,7 +164,13 @@ npm run db:up
 # 2. Apply pending migrations
 npm run db:migrate
 
-# 3. Open Drizzle Studio (optional — browser UI for the data)
+# Show applied vs pending
+npm run db:status
+
+# Roll back the most recently applied migration
+npm run db:rollback
+
+# 3. Open Drizzle Studio (optional, browser UI for the data)
 npm run db:studio
 
 # Stop the database
@@ -180,13 +186,18 @@ service reads credentials from AWS Secrets Manager via `DB_SECRET_ARN`.
 
 ### Schema changes
 
-1. Edit `services/rep/src/db/schema.ts`.
+1. Edit `services/rep/src/db/schema.ts` (or the enum classes in `db/enums.ts`).
 2. Generate a migration: `npm run db:generate`.
-3. Review the SQL in `services/rep/migrations/` and commit it.
-4. Apply it locally with `npm run db:migrate`.
+3. Review the SQL in `services/rep/migrations/0NNN_xxx.sql` and commit it.
+4. **Hand-write the matching `0NNN_xxx.down.sql`** that reverts the up file
+   (drop tables, drop enum types, drop columns added, etc).
+5. Apply it locally with `npm run db:migrate`.
 
-Migrations are tracked in `__drizzle_migrations` and are **not** auto-applied on
-Lambda cold start — they're meant to run as a deploy step.
+Migrations are tracked in `drizzle.__drizzle_migrations`. The custom migrator
+(`services/rep/src/db/migrator.ts`) keeps drizzle-kit's up workflow and journal
+intact, and adds a `down` command that finds the matching `.down.sql` by hash
+and runs it inside a transaction. Migrations are **not** auto-applied on Lambda
+cold start, they run as an explicit deploy step.
 
 ---
 
