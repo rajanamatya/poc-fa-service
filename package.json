@@ -19,7 +19,13 @@
     "deploy": "npm --workspace infrastructure run deploy",
     "init": "node scripts/init.mjs",
     "dev:frontend": "npm --workspace vue3 run dev",
-    "build:frontend": "npm --workspace vue3 run build"
+    "build:frontend": "npm --workspace vue3 run build",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:reset": "docker compose down -v && docker compose up -d",
+    "db:migrate": "npm --workspace services/rep run db:migrate",
+    "db:generate": "npm --workspace services/rep run db:generate",
+    "db:studio": "npm --workspace services/rep run db:studio"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
