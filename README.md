@@ -151,6 +151,56 @@ npm --workspace infrastructure run test
 
 ---
 
+## Local database (Postgres + Drizzle)
+
+The `rep` service uses [Drizzle ORM](https://orm.drizzle.team/) on top of `node-postgres`.
+For local development, a `docker-compose.yml` at the repo root spins up a Postgres
+instance that mirrors the production RDS engine version.
+
+```bash
+# 1. Start Postgres (defaults: localhost:5432, db=todos, user=postgres, password=postgres)
+npm run db:up
+
+# 2. Apply pending migrations
+npm run db:migrate
+
+# Show applied vs pending
+npm run db:status
+
+# Roll back the most recently applied migration
+npm run db:rollback
+
+# 3. Open Drizzle Studio (optional, browser UI for the data)
+npm run db:studio
+
+# Stop the database
+npm run db:down
+
+# Wipe data and start fresh
+npm run db:reset
+```
+
+Override connection settings by exporting `DB_HOST`, `DB_PORT`, `DB_USER`,
+`DB_PASSWORD`, `DB_NAME` (see `services/rep/.env.example`). In production the
+service reads credentials from AWS Secrets Manager via `DB_SECRET_ARN`.
+
+### Schema changes
+
+1. Edit `services/rep/src/db/schema.ts` (or the enum classes in `db/enums.ts`).
+2. Generate a migration: `npm run db:generate`.
+3. Review the SQL in `services/rep/migrations/0NNN_xxx.sql` and commit it.
+4. **Hand-write the matching `0NNN_xxx.down.sql`** that reverts the up file
+   (drop tables, drop enum types, drop columns added, etc).
+5. Apply it locally with `npm run db:migrate`.
+
+Migrations are tracked in `drizzle.__drizzle_migrations`. The custom migrator
+(`services/rep/src/db/migrator.ts`) keeps drizzle-kit's up workflow and journal
+intact, and adds a `down` command that finds the matching `.down.sql` by hash
+and runs it inside a transaction. Migrations are **not** auto-applied on Lambda
+cold start, they run as an explicit deploy step.
+
+---
+
 ## Adding a new Lambda service
 
 ### Step 1 — Create the service package
